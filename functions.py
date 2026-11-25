@@ -159,7 +159,7 @@ def register_user(username, email, password):
     session.close()
     return response
 
-
+ 
 # -------- LOGIN --------
 
 def verify_login(email, password):
@@ -243,3 +243,223 @@ def refresh_access_token(token):
     return {
         "access_token": access_token
     }
+
+def get_user_role(user_id):
+    session = Session(engine)
+    user = session.query(User).filter(User.user_id == user_id).first()
+    if user is None:
+        session.close()
+        return False
+    role = user.role
+    session.close()
+    return role
+
+# 7) Get squads created or joined by the logged-in player
+
+def get_player_squads(user_id):
+    session = Session(engine)
+
+    # Find squads created by this player (captain)
+    created_squads = session.query(Squad).filter(Squad.captain_id == user_id).all()
+
+    # Find squads where this player is a member
+    joined_memberships = session.query(SquadMember).filter(SquadMember.player_id == user_id).all()
+
+    response = []
+    squad_ids = []
+
+    # Add squads created by the player
+    for squad in created_squads:
+        if squad.squad_id not in squad_ids:
+            squad_ids.append(squad.squad_id)
+
+            response.append({
+                "squad_id": squad.squad_id,
+                "squad_name": squad.squad_name,
+                "captain_id": squad.captain_id,
+                "membership": "captain"
+            })
+
+    # Add squads joined by the player
+    for membership in joined_memberships:
+        squad = session.query(Squad).filter(Squad.squad_id == membership.squad_id).first()
+
+        if squad is not None and squad.squad_id not in squad_ids:
+            squad_ids.append(squad.squad_id)
+            response.append({
+                "squad_id": squad.squad_id,
+                "squad_name": squad.squad_name,
+                "captain_id": squad.captain_id,
+                "membership": "member"
+            })
+
+    session.close()
+    return response
+
+# 8) Invite a player to a squad
+
+def invite_player_to_squad(captain_id, squad_id, invited_player_id):
+    session = Session(engine)
+    squad = session.query(Squad).filter(Squad.squad_id == squad_id).first()
+    if squad is None:
+        session.close()
+        return {"error": "Squad not found"}
+
+    # Check whether the logged-in user is the captain
+    if squad.captain_id != captain_id:
+        session.close()
+        return {"error": "Only the squad captain can invite players"}
+
+    # Check whether the invited player exists
+    invited_player = session.query(User).filter(User.user_id == invited_player_id).first()
+
+    if invited_player is None:
+        session.close()
+        return {"error": "Player not found"}
+
+    # Captain cannot invite themselves
+    if captain_id == invited_player_id:
+        session.close()
+        return {"error": "You cannot invite yourself"}
+
+    # Check if player is already an active member
+    existing_member = session.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.player_id == invited_player_id,
+        SquadMember.status == "active"
+    ).first()
+
+    if existing_member:
+        session.close()
+        return {"error": "Player is already in this squad"}
+
+    # Check if a pending invitation already exists
+    existing_invitation = session.query(SquadInvitation).filter(
+        SquadInvitation.squad_id == squad_id,
+        SquadInvitation.invited_player_id == invited_player_id,
+        SquadInvitation.status == "pending"
+    ).first()
+
+    if existing_invitation:
+        session.close()
+        return {"error": "Invitation is already pending"}
+
+    # Count active squad members
+    active_members = session.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.status == "active"
+    ).all()
+
+    member_count = len(active_members)
+
+    # Add captain if they are not already in SquadMembers
+    captain_is_member = False
+
+    for member in active_members:
+        if member.player_id == captain_id:
+            captain_is_member = True
+            break
+
+    if not captain_is_member:
+        member_count += 1
+
+    # Count pending invitations to avoid over-inviting
+    pending_invitations = session.query(SquadInvitation).filter(
+        SquadInvitation.squad_id == squad_id,
+        SquadInvitation.status == "pending"
+    ).count()
+
+    if member_count + pending_invitations >= 4:
+        session.close()
+        return {"error": "Squad is full"}
+
+    # Create invitation
+    invitation = SquadInvitation(squad_id=squad_id,invited_player_id=invited_player_id,status="pending")
+    session.add(invitation)
+    session.commit()
+    invitation_id = invitation.invitation_id
+    session.close()
+    return {
+        "message": "Player invited successfully",
+        "invitation_id": invitation_id
+    }
+
+# E9: Player accepts or rejects a squad invitation
+
+def respond_to_squad_invitation(player_id, invitation_id, response):
+    session = Session(engine)
+    invitation = session.query(SquadInvitation).filter(
+        SquadInvitation.invitation_id == invitation_id
+    ).first()
+
+    if invitation is None:
+        session.close()
+        return {"error": "Invitation not found"}
+    
+    if invitation.invited_player_id != player_id:
+        session.close()
+        return {"error": "You are not allowed to respond to this invitation"}
+
+    if invitation.status != "pending":
+        session.close()
+        return {"error": "Invitation has already been responded to"}
+
+    if response == "reject":
+        invitation.status = "rejected"
+        session.commit()
+        session.close()
+        return {"message": "Invitation rejected successfully"}
+
+    if response == "accept":
+        squad = session.query(Squad).filter(
+            Squad.squad_id == invitation.squad_id
+        ).first()
+
+        if squad is None:
+            session.close()
+            return {"error": "Squad not found"}
+
+        existing_member = session.query(SquadMember).filter(
+            SquadMember.squad_id == invitation.squad_id,
+            SquadMember.player_id == player_id,
+            SquadMember.status == "active"
+        ).first()
+
+        if existing_member:
+            session.close()
+            return {"error": "You are already a member of this squad"}
+
+        active_members = session.query(SquadMember).filter(
+            SquadMember.squad_id == invitation.squad_id,
+            SquadMember.status == "active"
+        ).all()
+
+        member_count = len(active_members)
+
+        captain_is_member = False
+
+        for member in active_members:
+            if member.player_id == squad.captain_id:
+                captain_is_member = True
+                break
+
+        if not captain_is_member:
+            member_count += 1
+
+        if member_count >= 4:
+            session.close()
+            return {"error": "Squad is full"}
+
+        new_member = SquadMember(
+            squad_id=invitation.squad_id,
+            player_id=player_id,
+            status="active"
+        )
+
+        session.add(new_member)
+        invitation.status = "accepted"
+        session.commit()
+        session.close()
+        return {"message": "Invitation accepted successfully"}
+    session.close()
+    return {"error": "Invalid response. Use accept or reject"}
