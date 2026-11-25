@@ -8,126 +8,98 @@ app = FastAPI(title="BGMI Tournament Manager")
 
 
 # Request models
+class CreateOrganizer(BaseModel):
+    username: str
+    email: str
+    password: str
 
-class UpdateSquad(BaseModel):
+
+class CreateTournament(BaseModel):
+    tournament_name: str
+    description: str
+    map_name: str
+    registration_start: datetime
+    registration_end: datetime
+    max_squads: int
+
+
+class UpdateTournament(BaseModel):
+    tournament_name: str = None
+    description: str = None
+    map_name: str = None
+    registration_start: datetime = None
+    registration_end: datetime = None
+    max_squads: int = None
+    status: str = None
+
+
+class CreateSquad(BaseModel):
     squad_name: str
 
-
-class RegisterSquad(BaseModel):
-    squad_id: int
-
-
-class ScheduleMatch(BaseModel):
-    match_number: int
-    match_date: datetime
-    map_name: str
-
-
-class SubmitMatchResult(BaseModel):
-    squad_id: int
-    placement: int
-    kills: int
 
 @app.get("/")
 def home():
     return {"message": "BGMI Tournament Manager API is running"}
 
 
-# E10 - Update squad details
+# E1 – Create organizer
+@app.post("/admin/organizers")
+def add_organizer(data: CreateOrganizer, token: str = Header(None)):
 
-@app.patch("/squads/{squad_id}")
-def update_squad_details(data: UpdateSquad, squad_id: int, token: str = Header(None)):
+    user = functions.get_current_user(token)
 
-    user_id = functions.get_current_user(token)
+    if user is False:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    result = functions.update_squad(squad_id, user_id, data.squad_name)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can create organizers")
 
-    if result is False:
-        raise HTTPException(status_code=400, detail="Unable to update squad")
-
-    return {"message": "Squad updated successfully"}
-
-
-# E11 - Register squad for tournament
-
-@app.post("/tournaments/{tournament_id}/register")
-def register_tournament_squad(tournament_id: int, data: RegisterSquad, token: str = Header(None)):
-
-    user_id = functions.get_current_user(token)
-
-    result = functions.register_squad(tournament_id, data.squad_id, user_id)
-
-    if result is False:
-        raise HTTPException(status_code=400, detail="Unable to register squad")
-
-    return result
-
-
-# E12 - Withdraw squad from tournament
-
-@app.delete("/tournaments/{tournament_id}/squads/{squad_id}")
-def withdraw_tournament_squad(tournament_id: int, squad_id: int, token: str = Header(None)):
-
-    user_id = functions.get_current_user(token)
-
-    result = functions.withdraw_squad(tournament_id, squad_id, user_id)
-
-    if result is False:
-        raise HTTPException(status_code=400, detail="Unable to withdraw squad")
-
-    return result
-
-
-# E13 - Schedule tournament match
-
-@app.post("/tournaments/{tournament_id}/matches")
-def create_tournament_match(tournament_id: int, data: ScheduleMatch, token: str = Header(None)):
-
-    user_id = functions.get_current_user(token)
-
-    result = functions.schedule_match(
-        tournament_id,
-        user_id,
-        data.match_number,
-        data.match_date,
-        data.map_name
+    result = functions.create_organizer(
+        data.username,
+        data.email,
+        data.password
     )
 
     if result is False:
-        raise HTTPException(status_code=400, detail="Unable to schedule match")
+        raise HTTPException(status_code=400, detail="Email already exists")
 
     return result
 
 
-# E14 - Submit match results
+# E2 – Create tournament
+@app.post("/tournaments")
+def add_tournament(data: CreateTournament, token: str = Header(None)):
 
-@app.post("/matches/{match_id}/results")
-def create_match_result(match_id: int, data: SubmitMatchResult, token: str = Header(None)):
+    user = functions.get_current_user(token)
 
-    user_id = functions.get_current_user(token)
+    if user is False:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    result = functions.submit_match_result(
-        match_id,
-        user_id,
-        data.squad_id,
-        data.placement,
-        data.kills
+    if user.role != "organizer":
+        raise HTTPException(status_code=403, detail="Only organizers can create tournaments")
+
+    result = functions.create_tournament(
+        user.user_id,
+        data.tournament_name,
+        data.description,
+        data.map_name,
+        data.registration_start,
+        data.registration_end,
+        data.max_squads
     )
 
     if result is False:
-        raise HTTPException(status_code=400, detail="Unable to submit match result")
+        raise HTTPException(status_code=400, detail="Invalid tournament details")
 
     return result
 
 
-# E15 - Get tournament leaderboard
+# E3 – Get all available tournaments
+@app.get("/tournaments")
+def all_tournaments():
 
-@app.get("/tournaments/{tournament_id}/leaderboard")
-def tournament_leaderboard(tournament_id: int):
-
-    result = functions.get_tournament_leaderboard(tournament_id)
-
-    if result is False:
-        raise HTTPException(status_code=404, detail="Tournament not found")
+    result = functions.get_tournaments()
 
     return result
+
+
