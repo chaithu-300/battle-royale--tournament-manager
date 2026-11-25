@@ -247,4 +247,146 @@ def get_tournament_by_id(tournament_id):
     return response
 
 
-# 
+# E5 – Update tournament
+def update_tournament(tournament_id, user_id, tournament_name,
+                      description, map_name, registration_start,
+                      registration_end, max_squads, status):
+
+    session = Session(engine)
+
+    tournament = session.query(Tournament).filter_by(
+        tournament_id=tournament_id
+    ).first()
+
+    if tournament is None:
+        session.close()
+        return False
+
+    if tournament.organizer_id != user_id:
+        session.close()
+        return False
+
+    if tournament.status in ["ongoing", "completed", "cancelled"]:
+        session.close()
+        return False
+
+    if registration_start is not None:
+        if registration_end is not None:
+            if registration_start >= registration_end:
+                session.close()
+                return False
+        elif registration_start >= tournament.registration_end:
+            session.close()
+            return False
+
+        tournament.registration_start = registration_start
+
+    if registration_end is not None:
+        if registration_start is None:
+            if registration_end <= tournament.registration_start:
+                session.close()
+                return False
+
+        tournament.registration_end = registration_end
+
+    if max_squads is not None:
+        if max_squads < 1:
+            session.close()
+            return False
+
+        registered_squads = session.query(TournamentRegistration).filter_by(
+            tournament_id=tournament_id,
+            status="active"
+        ).count()
+
+        if max_squads < registered_squads:
+            session.close()
+            return False
+
+        tournament.max_squads = max_squads
+
+    if tournament_name is not None:
+        if tournament_name.strip() == "":
+            session.close()
+            return False
+        tournament.tournament_name = tournament_name.strip()
+
+    if description is not None:
+        tournament.description = description
+
+    if map_name is not None:
+        if map_name.strip() == "":
+            session.close()
+            return False
+        tournament.map = map_name.strip()
+
+    if status is not None:
+        if status not in [
+            "draft",
+            "registration_open",
+            "registration_closed",
+            "ongoing",
+            "completed",
+            "cancelled"
+        ]:
+            session.close()
+            return False
+
+        tournament.status = status
+
+    session.commit()
+
+    response = {
+        "tournament_id": tournament.tournament_id,
+        "tournament_name": tournament.tournament_name,
+        "description": tournament.description,
+        "map": tournament.map,
+        "registration_start": tournament.registration_start,
+        "registration_end": tournament.registration_end,
+        "max_squads": tournament.max_squads,
+        "status": tournament.status
+    }
+
+    session.close()
+    return response
+
+
+# E6 – Create squad
+def create_squad(user_id, squad_name):
+    session = Session(engine)
+
+    if squad_name.strip() == "":
+        session.close()
+        return False
+
+    new_squad = Squad(
+        squad_name=squad_name.strip(),
+        captain_id=user_id
+    )
+
+    session.add(new_squad)
+    session.commit()
+
+    new_member = SquadMember(
+        squad_id=new_squad.squad_id,
+        player_id=user_id,
+        status="active"
+    )
+
+    session.add(new_member)
+    session.commit()
+
+    response = {
+        "squad_id": new_squad.squad_id,
+        "squad_name": new_squad.squad_name,
+        "captain_id": new_squad.captain_id,
+        "members": [
+            {
+                "player_id": user_id,
+                "status": "active"
+            }
+        ]
+    }
+
+    session.close()
+    return response

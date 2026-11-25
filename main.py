@@ -114,3 +114,55 @@ def tournament_details(tournament_id: int):
     return result
 
 
+# E5 – Update tournament
+@app.patch("/tournaments/{tournament_id}")
+def edit_tournament(tournament_id: int, data: UpdateTournament, token: str = Header(None)):
+
+    user = functions.get_current_user(token)
+
+    if user is False:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if user.role != "organizer":
+        raise HTTPException(status_code=403, detail="Only organizers can update tournaments")
+
+    result = functions.update_tournament(
+        tournament_id,
+        user.user_id,
+        data.tournament_name,
+        data.description,
+        data.map_name,
+        data.registration_start,
+        data.registration_end,
+        data.max_squads,
+        data.status
+    )
+
+    if result is False:
+        raise HTTPException(status_code=400, detail="Tournament could not be updated")
+
+    return result
+
+
+# E6 – Create squad
+@app.post("/squads")
+def add_squad(data: CreateSquad, token: str = Header(None)):
+
+    user = functions.get_current_user(token)
+
+    if user is False:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if user.role != "player":
+        raise HTTPException(status_code=403, detail="Only players can create squads")
+
+    result = functions.create_squad(
+        user.user_id,
+        data.squad_name
+    )
+
+    if result is False:
+        raise HTTPException(status_code=400, detail="Invalid squad name")
+
+    return result
+
