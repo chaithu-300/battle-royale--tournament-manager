@@ -213,4 +213,38 @@ def get_tournaments():
     return response
 
 
+# E4 – Get tournament by ID
+def get_tournament_by_id(tournament_id):
+    session = Session(engine)
+
+    tournament = session.query(Tournament).filter_by(
+        tournament_id=tournament_id
+    ).first()
+
+    if tournament is None:
+        session.close()
+        return False
+
+    registered_squads = session.query(TournamentRegistration).filter_by(
+        tournament_id=tournament_id,
+        status="active"
+    ).count()
+
+    response = {
+        "tournament_id": tournament.tournament_id,
+        "organizer_id": tournament.organizer_id,
+        "tournament_name": tournament.tournament_name,
+        "description": tournament.description,
+        "map": tournament.map,
+        "registration_start": tournament.registration_start,
+        "registration_end": tournament.registration_end,
+        "max_squads": tournament.max_squads,
+        "status": tournament.status,
+        "registered_squads": registered_squads
+    }
+
+    session.close()
+    return response
+
+
 # 

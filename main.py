@@ -102,4 +102,15 @@ def all_tournaments():
 
     return result
 
+# E4 - Get tournament by ID
+@app.get("/tournaments/{tournament_id}")
+def tournament_details(tournament_id: int):
+
+    result = functions.get_tournament_by_id(tournament_id)
+
+    if result is False:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+
+    return result
+
 
