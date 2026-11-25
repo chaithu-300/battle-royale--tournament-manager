@@ -1,7 +1,6 @@
-
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, UniqueConstraint, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, create_engine
+from sqlalchemy.orm import declarative_base, Session
 
 ACCESS_TOKEN_EXPIRY = 15  # minutes
 REFRESH_TOKEN_EXPIRY = 7 * 24 * 60  # minutes
@@ -12,17 +11,9 @@ ALGORITHM = "HS256"
 
 # DATABASE CONNECTION
 
-DATABASE_URL = "sqlite:///./battle-royale.db"
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
-
-SessionLocal = sessionmaker(bind=engine)
-
+DB_URL = "sqlite:///./battle-royale.db"
+engine = create_engine(DB_URL)
 Base = declarative_base()
-
 
 # 1. USERS TABLE
 
@@ -35,7 +26,6 @@ class User(Base):
     password = Column(String, nullable=False)
     role = Column(String, default="player", nullable=False)
 
-
 # 2. SQUADS TABLE
 
 class Squad(Base):
@@ -44,7 +34,6 @@ class Squad(Base):
     squad_id = Column(Integer, primary_key=True, autoincrement=True)
     squad_name = Column(String, nullable=False)
     captain_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False)
-
 
 # 3. SQUAD MEMBERS TABLE
 
@@ -56,7 +45,6 @@ class SquadMember(Base):
     player_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False)
     status = Column(String, default="active", nullable=False)
 
-
 # 4. SQUAD INVITATIONS TABLE
 
 class SquadInvitation(Base):
@@ -67,7 +55,6 @@ class SquadInvitation(Base):
     invited_player_id = Column(Integer, ForeignKey("Users.user_id"), nullable=False)
     status = Column(String, default="pending", nullable=False)
     created_at = Column(DateTime, default=datetime.now)
-
 
 # 5. TOURNAMENTS TABLE
 
@@ -84,48 +71,30 @@ class Tournament(Base):
     max_squads = Column(Integer, nullable=False)
     status = Column(String, default="draft", nullable=False)
 
-
 # 6. TOURNAMENT REGISTRATIONS TABLE
 
 class TournamentRegistration(Base):
     __tablename__ = "TournamentRegistrations"
-
-    __table_args__ = (
-        UniqueConstraint("tournament_id", "squad_id"),
-    )
-
     registration_id = Column(Integer, primary_key=True, autoincrement=True)
     tournament_id = Column(Integer, ForeignKey("Tournaments.tournament_id"), nullable=False)
     squad_id = Column(Integer, ForeignKey("Squads.squad_id"), nullable=False)
     registered_at = Column(DateTime, default=datetime.now)
     status = Column(String, default="active", nullable=False)
 
-
 # 7. MATCHES TABLE
 
 class Match(Base):
     __tablename__ = "Matches"
-
-    __table_args__ = (
-        UniqueConstraint("tournament_id", "match_number"),
-    )
-
     match_id = Column(Integer, primary_key=True, autoincrement=True)
     tournament_id = Column(Integer, ForeignKey("Tournaments.tournament_id"), nullable=False)
     match_number = Column(Integer, nullable=False)
     match_date = Column(DateTime, nullable=False)
     map = Column(String, nullable=False)
 
-
 # 8. MATCH RESULTS TABLE
 
 class MatchResult(Base):
     __tablename__ = "MatchResults"
-
-    __table_args__ = (
-        UniqueConstraint("match_id", "squad_id"),
-    )
-
     result_id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(Integer, ForeignKey("Matches.match_id"), nullable=False)
     squad_id = Column(Integer, ForeignKey("Squads.squad_id"), nullable=False)
@@ -134,231 +103,234 @@ class MatchResult(Base):
     placement_points = Column(Integer, nullable=False)
     total_points = Column(Integer, nullable=False)
 
+Base.metadata.create_all(engine)
 
-Base.metadata.create_all(bind=engine)
 
-def get_db():
-    db = SessionLocal()
-    yield db
-    db.close()
+def get_current_user(token):
+    if not token:
+        return False
 
+    user_id = verify_token(token)
+
+    if user_id is False:
+        return False
+
+    session = Session(engine)
+
+    user = session.query(User).filter_by(user_id=user_id).first()
+
+    session.close()
+
+    if user is None:
+        return False
+
+    return user
 
 # --------------------------------------------------
-# E10: UPDATE SQUAD DETAILS
+# E10: UPDATE SQUAD FOR TOURNAMENT
 # --------------------------------------------------
 
-def update_squad(db: Session, squad_id: int, user_id: int, squad_name: str):
+def update_squad(squad_id, user_id, squad_name):
+    session = Session(engine)
 
-    squad = db.query(Squad).filter(
-        Squad.squad_id == squad_id
-    ).first()
+    squad = session.query(Squad).filter_by(squad_id=squad_id).first()
 
     if squad is None:
-        return False, "Squad not found", None
+        session.close()
+        return False
 
-    if squad.captain_id != user_id: #pyright:ignore
-        return False, "Only the squad captain can update squad details", None
+    if squad.captain_id != user_id:
+        session.close()
+        return False
 
     if squad_name.strip() == "":
-        return False, "Squad name cannot be empty", None
+        session.close()
+        return False
 
-    squad.squad_name = squad_name.strip() #pyright:ignore
+    squad.squad_name = squad_name.strip()
 
-    db.commit()
-    db.refresh(squad)
+    session.commit()
+    session.close()
 
-    return True, "Squad updated successfully", {
-        "squad_id": squad.squad_id,
-        "squad_name": squad.squad_name,
-        "captain_id": squad.captain_id
-    }
+    return True
 
 
 # --------------------------------------------------
 # E11: REGISTER SQUAD FOR TOURNAMENT
 # --------------------------------------------------
+def register_squad(tournament_id, squad_id, user_id):
+    session = Session(engine)
 
-def register_squad(db: Session, tournament_id: int, squad_id: int, user_id: int):
-
-    tournament = db.query(Tournament).filter(
-        Tournament.tournament_id == tournament_id
-    ).first()
+    tournament = session.query(Tournament).filter_by(tournament_id=tournament_id).first()
 
     if tournament is None:
-        return False, "Tournament not found", None
+        session.close()
+        return False
 
-    squad = db.query(Squad).filter(
-        Squad.squad_id == squad_id
-    ).first()
+    squad = session.query(Squad).filter_by(squad_id=squad_id).first()
 
-    if squad is None:
-        return False, "Squad not found", None
+    if squad is None or squad.captain_id != user_id:
+        session.close()
+        return False
 
-    if squad.captain_id != user_id: #pyright:ignore
-        return False, "Only the squad captain can register the squad", None
+    if tournament.status != "registration_open":   #pyright:ignore
+        session.close()
+        return False
 
-    if tournament.status != "registration_open": #pyright:ignore
-        return False, "Tournament registration is not open", None
+    if datetime.now() < tournament.registration_start or datetime.now() > tournament.registration_end:  #pyright:ignore
+        session.close()
+        return False
 
-    current_time = datetime.now()
-
-    if current_time < tournament.registration_start or current_time > tournament.registration_end: #pyright:ignore
-        return False, "Tournament registration is outside the allowed dates", None 
-
-    members = db.query(SquadMember).filter(
-        SquadMember.squad_id == squad_id,
-        SquadMember.status == "active"
+    members = session.query(SquadMember).filter_by(
+        squad_id=squad_id,
+        status="active"
     ).all()
 
     if len(members) < 1 or len(members) > 4:
-        return False, "A squad must have between 1 and 4 active players", None
+        session.close()
+        return False
 
-    existing_registration = db.query(TournamentRegistration).filter(
-        TournamentRegistration.tournament_id == tournament_id,
-        TournamentRegistration.squad_id == squad_id
+    registration = session.query(TournamentRegistration).filter_by(
+        tournament_id=tournament_id,
+        squad_id=squad_id
     ).first()
 
-    if existing_registration is not None:
-        if existing_registration.status == "active":  #pyright:ignore
-            return False, "Squad is already registered", None
-        existing_registration.status = "active"  #pyright:ignore
-        existing_registration.registered_at = datetime.now()  #pyright:ignore
+    if registration is not None and registration.status == "active":  #pyright:ignore
+        session.close()
+        return False
 
-    else:
-        existing_registration = TournamentRegistration(
-            tournament_id=tournament_id,
-            squad_id=squad_id,
-            status="active"
-        )
-
-        db.add(existing_registration)
-
-    registered_squads = db.query(TournamentRegistration).filter(
-        TournamentRegistration.tournament_id == tournament_id,
-        TournamentRegistration.status == "active"
+    registered_squads = session.query(TournamentRegistration).filter_by(
+        tournament_id=tournament_id,
+        status="active"
     ).count()
 
-    if registered_squads > tournament.max_squads:  #pyright:ignore
-        db.rollback()
-        return False, "Tournament has reached maximum squad capacity", None
+    if registered_squads >= tournament.max_squads:  #pyright:ignore
+        session.close()
+        return False
 
     for member in members:
-
-        other_registration = db.query(TournamentRegistration).join(
-            SquadMember,
-            TournamentRegistration.squad_id == SquadMember.squad_id
+        other_squad = session.query(SquadMember).join(
+            TournamentRegistration,
+            SquadMember.squad_id == TournamentRegistration.squad_id
         ).filter(
             TournamentRegistration.tournament_id == tournament_id,
             TournamentRegistration.status == "active",
             SquadMember.player_id == member.player_id,
-            SquadMember.status == "active",
-            SquadMember.squad_id != squad_id
+            SquadMember.status == "active"
         ).first()
 
-        if other_registration is not None:
-            db.rollback()
-            return False, "A player is already part of another registered squad", None
-
-    db.commit()
-    db.refresh(existing_registration)
-
-    return True, "Squad registered successfully", {
-        "registration_id": existing_registration.registration_id,
-        "tournament_id": tournament_id,
-        "squad_id": squad_id,
-        "status": existing_registration.status
-    }
-
-
-# --------------------------------------------------
-# E12: WITHDRAW SQUAD FROM TOURNAMENT
-# --------------------------------------------------
-
-def withdraw_squad(db: Session, tournament_id: int, squad_id: int, user_id: int):
-
-    squad = db.query(Squad).filter(
-        Squad.squad_id == squad_id
-    ).first()
-
-    if squad is None:
-        return False, "Squad not found", None
-
-    if squad.captain_id != user_id:  #pyright:ignore
-        return False, "Only the squad captain can withdraw the squad", None
-
-    tournament = db.query(Tournament).filter(
-        Tournament.tournament_id == tournament_id
-    ).first()
-
-    if tournament is None:
-        return False, "Tournament not found", None
-
-    if tournament.status in ["ongoing", "completed", "cancelled"]:
-        return False, "Squad cannot withdraw from this tournament", None
-
-    registration = db.query(TournamentRegistration).filter(
-        TournamentRegistration.tournament_id == tournament_id,
-        TournamentRegistration.squad_id == squad_id,
-        TournamentRegistration.status == "active"
-    ).first()
+        if other_squad is not None:
+            session.close()
+            return False
 
     if registration is None:
-        return False, "Squad is not registered for this tournament", None
+        registration = TournamentRegistration(
+            tournament_id=tournament_id,
+            squad_id=squad_id,
+            status="active"
+        )
+        session.add(registration)
+    else:
+        registration.status = "active"  #pyright:ignore
+        registration.registered_at = datetime.now()  #pyright:ignore
 
-    registration.status = "withdrawn"  #pyright:ignore
+    session.commit()
 
-    db.commit()
-
-    return True, "Squad withdrawn successfully", {
+    response = {
         "registration_id": registration.registration_id,
         "tournament_id": tournament_id,
         "squad_id": squad_id,
         "status": registration.status
     }
 
+    session.close()
+    return response
+
+
+# --------------------------------------------------
+# E12: WITHDRAW SQUAD FROM TOURNAMENT
+# --------------------------------------------------
+
+def withdraw_squad(tournament_id, squad_id, user_id):
+    session = Session(engine)
+
+    squad = session.query(Squad).filter_by(squad_id=squad_id).first()
+
+    if squad is None or squad.captain_id != user_id:
+        session.close()
+        return False
+
+    tournament = session.query(Tournament).filter_by(tournament_id=tournament_id).first()
+
+    if tournament is None:
+        session.close()
+        return False
+
+    if tournament.status in ["ongoing", "completed", "cancelled"]:
+        session.close()
+        return False
+
+    registration = session.query(TournamentRegistration).filter_by(
+        tournament_id=tournament_id,
+        squad_id=squad_id,
+        status="active"
+    ).first()
+
+    if registration is None:
+        session.close()
+        return False
+
+    registration.status = "withdrawn"   #pyright:ignore
+
+    session.commit()
+
+    response = {
+        "registration_id": registration.registration_id,
+        "tournament_id": tournament_id,
+        "squad_id": squad_id,
+        "status": registration.status
+    }
+
+    session.close()
+    return response
+
 
 # --------------------------------------------------
 # E13: SCHEDULE TOURNAMENT MATCH
 # --------------------------------------------------
+def schedule_match(tournament_id, user_id, match_number, match_date, map_name):
+    session = Session(engine)
 
-def schedule_match(
-    db: Session,
-    tournament_id: int,
-    user_id: int,
-    match_number: int,
-    match_date: datetime,
-    map_name: str
-):
+    tournament = session.query(Tournament).filter_by(tournament_id=tournament_id).first()
 
-    tournament = db.query(Tournament).filter(
-        Tournament.tournament_id == tournament_id
-    ).first()
-
-    if tournament is None:
-        return False, "Tournament not found", None
-
-    if tournament.organizer_id != user_id:  #pyright:ignore
-        return False, "You are not the organizer of this tournament", None
+    if tournament is None or tournament.organizer_id != user_id:
+        session.close()
+        return False
 
     if tournament.status not in ["registration_closed", "ongoing"]:
-        return False, "Matches cannot be scheduled in the current tournament status", None
+        session.close()
+        return False
 
     if match_number < 1:
-        return False, "Match number must be greater than zero", None
+        session.close()
+        return False
 
     if match_date <= datetime.now():
-        return False, "Match date must be in the future", None
+        session.close()
+        return False
 
     if map_name.strip() == "":
-        return False, "Map name cannot be empty", None
+        session.close()
+        return False
 
-    existing_match = db.query(Match).filter(
-        Match.tournament_id == tournament_id,
-        Match.match_number == match_number
+    existing_match = session.query(Match).filter_by(
+        tournament_id=tournament_id,
+        match_number=match_number
     ).first()
 
     if existing_match is not None:
-        return False, "This match number already exists", None
+        session.close()
+        return False
 
     new_match = Match(
         tournament_id=tournament_id,
@@ -367,80 +339,72 @@ def schedule_match(
         map=map_name.strip()
     )
 
-    db.add(new_match)
-    db.commit()
-    db.refresh(new_match)
+    session.add(new_match)
+    session.commit()
 
-    return True, "Match scheduled successfully", {
+    response = {
         "match_id": new_match.match_id,
-        "tournament_id": new_match.tournament_id,
-        "match_number": new_match.match_number,
-        "match_date": new_match.match_date,
-        "map": new_match.map
+        "tournament_id": tournament_id,
+        "match_number": match_number,
+        "match_date": match_date,
+        "map": map_name.strip()
     }
 
+    session.close()
+    return response
 
 # --------------------------------------------------
 # E14: SUBMIT MATCH RESULTS
 # --------------------------------------------------
+def submit_match_result(match_id, user_id, squad_id, placement, kills):
+    session = Session(engine)
 
-def submit_match_result(
-    db: Session,
-    match_id: int,
-    user_id: int,
-    squad_id: int,
-    placement: int,
-    kills: int
-):
-
-    match = db.query(Match).filter(
-        Match.match_id == match_id
-    ).first()
+    match = session.query(Match).filter_by(match_id=match_id).first()
 
     if match is None:
-        return False, "Match not found", None
+        session.close()
+        return False
 
-    tournament = db.query(Tournament).filter(
-        Tournament.tournament_id == match.tournament_id
+    tournament = session.query(Tournament).filter_by(
+        tournament_id=match.tournament_id
     ).first()
 
-    if tournament.organizer_id != user_id:  #pyright:ignore
-        return False, "You are not the organizer of this tournament", None
+    if tournament is None or tournament.organizer_id != user_id:
+        session.close()
+        return False
 
-    if tournament.status not in ["ongoing", "completed"]:  #pyright:ignore
-        return False, "Results cannot be submitted for this tournament", None
+    if tournament.status not in ["ongoing", "completed"]:
+        session.close()
+        return False
 
-    if placement < 1:
-        return False, "Placement must be at least 1", None
+    if placement < 1 or kills < 0:
+        session.close()
+        return False
 
-    if kills < 0:
-        return False, "Kills cannot be negative", None
-
-    squad = db.query(Squad).filter(
-        Squad.squad_id == squad_id
-    ).first()
+    squad = session.query(Squad).filter_by(squad_id=squad_id).first()
 
     if squad is None:
-        return False, "Squad not found", None
+        session.close()
+        return False
 
-    registration = db.query(TournamentRegistration).filter(
-        TournamentRegistration.tournament_id == match.tournament_id,
-        TournamentRegistration.squad_id == squad_id,
-        TournamentRegistration.status == "active"
+    registration = session.query(TournamentRegistration).filter_by(
+        tournament_id=match.tournament_id,
+        squad_id=squad_id,
+        status="active"
     ).first()
 
     if registration is None:
-        return False, "Only registered squads can receive match results", None
+        session.close()
+        return False
 
-
-    existing_result = db.query(MatchResult).filter(
-        MatchResult.match_id == match_id,
-        MatchResult.squad_id == squad_id
+    existing_result = session.query(MatchResult).filter_by(
+        match_id=match_id,
+        squad_id=squad_id
     ).first()
 
     if existing_result is not None:
-        return False, "Result for this squad has already been submitted", None
-
+        session.close()
+        return False
 
     if placement == 1:
         placement_points = 15
@@ -468,11 +432,10 @@ def submit_match_result(
         total_points=total_points
     )
 
-    db.add(new_result)
-    db.commit()
-    db.refresh(new_result)
+    session.add(new_result)
+    session.commit()
 
-    return True, "Match result submitted successfully", {
+    response = {
         "result_id": new_result.result_id,
         "match_id": match_id,
         "squad_id": squad_id,
@@ -482,38 +445,36 @@ def submit_match_result(
         "total_points": total_points
     }
 
+    session.close()
+    return response
 
 # --------------------------------------------------
 # E15: GET TOURNAMENT LEADERBOARD
 # --------------------------------------------------
+def get_tournament_leaderboard(tournament_id):
+    session = Session(engine)
 
-def get_tournament_leaderboard(db: Session, tournament_id: int):
-
-    tournament = db.query(Tournament).filter(
-        Tournament.tournament_id == tournament_id
+    tournament = session.query(Tournament).filter_by(
+        tournament_id=tournament_id
     ).first()
 
     if tournament is None:
-        return False, "Tournament not found", None
+        session.close()
+        return False
 
-
-    registrations = db.query(TournamentRegistration).filter(
-        TournamentRegistration.tournament_id == tournament_id,
-        TournamentRegistration.status == "active"
+    registrations = session.query(TournamentRegistration).filter_by(
+        tournament_id=tournament_id,
+        status="active"
     ).all()
 
     leaderboard = []
 
     for registration in registrations:
-
-        squad = db.query(Squad).filter(
-            Squad.squad_id == registration.squad_id
+        squad = session.query(Squad).filter_by(
+            squad_id=registration.squad_id
         ).first()
 
-        results = db.query(MatchResult).join(
-            Match,
-            MatchResult.match_id == Match.match_id
-        ).filter(
+        results = session.query(MatchResult).join(Match).filter(
             Match.tournament_id == tournament_id,
             MatchResult.squad_id == registration.squad_id
         ).all()
@@ -522,27 +483,26 @@ def get_tournament_leaderboard(db: Session, tournament_id: int):
         total_points = 0
 
         for result in results:
-            total_kills = total_kills + result.kills
-            total_points = total_points + result.total_points
+            total_kills += result.kills
+            total_points += result.total_points
 
         leaderboard.append({
-            "squad_id": squad.squad_id,  #pyright:ignore
+            "squad_id": squad.squad_id,   #pyright:ignore
             "squad_name": squad.squad_name,  #pyright:ignore
             "total_kills": total_kills,
             "total_points": total_points
         })
-
 
     leaderboard.sort(
         key=lambda squad: (squad["total_points"], squad["total_kills"]),
         reverse=True
     )
 
-
     rank = 1
 
     for squad in leaderboard:
         squad["rank"] = rank
-        rank = rank + 1
+        rank += 1
 
-    return True, "Leaderboard retrieved successfully", leaderboard
+    session.close()
+    return leaderboard

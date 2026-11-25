@@ -1,309 +1,133 @@
-
+from fastapi import FastAPI, HTTPException, Header
+from pydantic import BaseModel
 from datetime import datetime
-from fastapi import FastAPI, Depends, HTTPException, Header
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
-import jwt
 
-from functions import (
-    get_db,
-    User,
-    update_squad,
-    register_squad,
-    withdraw_squad,
-    schedule_match,
-    submit_match_result,
-    get_tournament_leaderboard,
-    SECRET_KEY,
-    ALGORITHM
-)
-
+import functions
 
 app = FastAPI(title="BGMI Tournament Manager")
 
 
-# --------------------------------------------------
-# PYDANTIC MODELS
-# --------------------------------------------------
-
-# E10 - UPDATE SQUAD
+# Request models
 
 class UpdateSquad(BaseModel):
     squad_name: str
 
 
-# E11 - REGISTER SQUAD
-
 class RegisterSquad(BaseModel):
     squad_id: int
 
 
-# E13 - SCHEDULE MATCH
-
 class ScheduleMatch(BaseModel):
-    match_number: int = Field(ge=1)
+    match_number: int
     match_date: datetime
     map_name: str
 
 
-# E14 - SUBMIT MATCH RESULT
-
 class SubmitMatchResult(BaseModel):
     squad_id: int
-    placement: int = Field(ge=1)
-    kills: int = Field(ge=0)
+    placement: int
+    kills: int
+
+@app.get("/")
+def home():
+    return {"message": "BGMI Tournament Manager API is running"}
 
 
-# --------------------------------------------------
-# AUTHENTICATION
-# --------------------------------------------------
-
-def get_current_user(
-    authorization: str = Header(default=None),
-    db: Session = Depends(get_db)
-):
-
-    if authorization is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Authorization token is required"
-        )
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authorization format. Use Bearer token"
-        )
-
-    token = authorization.split(" ")[1]
-
-    try:
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
-        )
-
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token"
-        )
-
-    user_id = payload.get("user_id", payload.get("sub"))
-
-    if user_id is None or not str(user_id).isdigit():
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token payload"
-        )
-
-    user = db.query(User).filter(
-        User.user_id == int(user_id)
-    ).first()
-
-    if user is None:
-        raise HTTPException(
-            status_code=401,
-            detail="User not found"
-        )
-
-    return user
-
-
-# PLAYER ROLE CHECK
-
-def get_current_player(
-    user: User = Depends(get_current_user)
-):
-
-    if user.role != "player":  #pyright:ignore
-        raise HTTPException(
-            status_code=403,
-            detail="Only players can access this endpoint"
-        )
-
-    return user
-
-
-# ORGANIZER ROLE CHECK
-
-def get_current_organizer(
-    user: User = Depends(get_current_user)
-):
-
-    if user.role != "organizer":  #pyright:ignore
-        raise HTTPException(
-            status_code=403,
-            detail="Only organizers can access this endpoint"
-        )
-
-    return user
-
-
-# --------------------------------------------------
-# COMMON FUNCTION RESPONSE HANDLER
-# --------------------------------------------------
-
-def handle_response(result):
-
-    success, message, data = result
-
-    if success is False:
-
-        if "not found" in message.lower():
-            status_code = 404
-
-        elif "only" in message.lower() or "not the organizer" in message.lower():
-            status_code = 403
-
-        else:
-            status_code = 400
-
-        raise HTTPException(
-            status_code=status_code,
-            detail=message
-        )
-
-    return {
-        "message": message,
-        "data": data
-    }
-
-
-# --------------------------------------------------
-# E10: UPDATE SQUAD DETAILS
-# PATCH /squads/{squad_id}
-# --------------------------------------------------
+# E10 - Update squad details
 
 @app.patch("/squads/{squad_id}")
-def update_squad_details(
-    squad_id: int,
-    request: UpdateSquad,
-    user: User = Depends(get_current_player),
-    db: Session = Depends(get_db)
-):
+def update_squad_details(data: UpdateSquad, squad_id: int, token: str = Header(None)):
 
-    result = update_squad(
-        db,
-        squad_id,
-        user.user_id,  #pyright:ignore
-        request.squad_name
-    )
+    user_id = functions.get_current_user(token)
 
-    return handle_response(result)
+    result = functions.update_squad(squad_id, user_id, data.squad_name)
+
+    if result is False:
+        raise HTTPException(status_code=400, detail="Unable to update squad")
+
+    return {"message": "Squad updated successfully"}
 
 
-# --------------------------------------------------
-# E11: REGISTER SQUAD FOR TOURNAMENT
-# POST /tournaments/{tournament_id}/register
-# --------------------------------------------------
+# E11 - Register squad for tournament
 
 @app.post("/tournaments/{tournament_id}/register")
-def register_tournament_squad(
-    tournament_id: int,
-    request: RegisterSquad,
-    user: User = Depends(get_current_player),
-    db: Session = Depends(get_db)
-):
+def register_tournament_squad(tournament_id: int, data: RegisterSquad, token: str = Header(None)):
 
-    result = register_squad(
-        db,
-        tournament_id,
-        request.squad_id,
-        user.user_id   #pyright:ignore
-    )
+    user_id = functions.get_current_user(token)
 
-    return handle_response(result)
+    result = functions.register_squad(tournament_id, data.squad_id, user_id)
+
+    if result is False:
+        raise HTTPException(status_code=400, detail="Unable to register squad")
+
+    return result
 
 
-# --------------------------------------------------
-# E12: WITHDRAW SQUAD FROM TOURNAMENT
-# DELETE /tournaments/{tournament_id}/squads/{squad_id}
-# --------------------------------------------------
+# E12 - Withdraw squad from tournament
 
 @app.delete("/tournaments/{tournament_id}/squads/{squad_id}")
-def withdraw_tournament_squad(
-    tournament_id: int,
-    squad_id: int,
-    user: User = Depends(get_current_player),
-    db: Session = Depends(get_db)
-):
+def withdraw_tournament_squad(tournament_id: int, squad_id: int, token: str = Header(None)):
 
-    result = withdraw_squad(
-        db,
-        tournament_id,
-        squad_id, 
-        user.user_id   #pyright:ignore
-    )
+    user_id = functions.get_current_user(token)
 
-    return handle_response(result)
+    result = functions.withdraw_squad(tournament_id, squad_id, user_id)
+
+    if result is False:
+        raise HTTPException(status_code=400, detail="Unable to withdraw squad")
+
+    return result
 
 
-# --------------------------------------------------
-# E13: SCHEDULE TOURNAMENT MATCH
-# POST /tournaments/{tournament_id}/matches
-# --------------------------------------------------
+# E13 - Schedule tournament match
 
 @app.post("/tournaments/{tournament_id}/matches")
-def create_tournament_match(
-    tournament_id: int,
-    request: ScheduleMatch,
-    user: User = Depends(get_current_organizer),
-    db: Session = Depends(get_db)
-):
+def create_tournament_match(tournament_id: int, data: ScheduleMatch, token: str = Header(None)):
 
-    result = schedule_match(
-        db,
+    user_id = functions.get_current_user(token)
+
+    result = functions.schedule_match(
         tournament_id,
-        user.user_id,   #pyright:ignore
-        request.match_number,
-        request.match_date,
-        request.map_name
+        user_id,
+        data.match_number,
+        data.match_date,
+        data.map_name
     )
 
-    return handle_response(result)
+    if result is False:
+        raise HTTPException(status_code=400, detail="Unable to schedule match")
+
+    return result
 
 
-# --------------------------------------------------
-# E14: SUBMIT MATCH RESULTS
-# POST /matches/{match_id}/results
-# --------------------------------------------------
+# E14 - Submit match results
 
 @app.post("/matches/{match_id}/results")
-def create_match_result(
-    match_id: int,
-    request: SubmitMatchResult,
-    user: User = Depends(get_current_organizer),
-    db: Session = Depends(get_db)
-):
+def create_match_result(match_id: int, data: SubmitMatchResult, token: str = Header(None)):
 
-    result = submit_match_result(
-        db,
+    user_id = functions.get_current_user(token)
+
+    result = functions.submit_match_result(
         match_id,
-        user.user_id,  #pyright:ignore
-        request.squad_id,
-        request.placement,
-        request.kills
+        user_id,
+        data.squad_id,
+        data.placement,
+        data.kills
     )
 
-    return handle_response(result)
+    if result is False:
+        raise HTTPException(status_code=400, detail="Unable to submit match result")
+
+    return result
 
 
-# --------------------------------------------------
-# E15: GET TOURNAMENT LEADERBOARD
-# GET /tournaments/{tournament_id}/leaderboard
-# --------------------------------------------------
+# E15 - Get tournament leaderboard
 
 @app.get("/tournaments/{tournament_id}/leaderboard")
-def tournament_leaderboard(
-    tournament_id: int,
-    db: Session = Depends(get_db)
-):
+def tournament_leaderboard(tournament_id: int):
 
-    result = get_tournament_leaderboard(
-        db,
-        tournament_id
-    )
+    result = functions.get_tournament_leaderboard(tournament_id)
 
-    return handle_response(result)
+    if result is False:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+
+    return result
