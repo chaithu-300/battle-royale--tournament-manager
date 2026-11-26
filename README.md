@@ -15,13 +15,13 @@ Update your own row at every check-in.
 |---|---|---|---|---|---|
 | Day 1 | Praneeth | E1 to E6 endpoints | E1 & E2 | E3 to E6 endpoints | no |
 | Day 1 | Kommaddi Fayaz |  |  |  |  |
-| Day 1 | chaithanya |  |  | |  |
+| Day 1 | chaithanya | Defined Endpoints from E10 to E15 | E10, 12, 13 |E14, 15 | No |
 | Day 2 | Praneeth | working on E3,E4,E5,E6 functions| completed | solve the errors|yes  |
 | Day 2 | Kommaddi Fayaz |   |  |  |  |
-| Day 2 | chaithanya |  |  |  |  |
+| Day 2 | chaithanya | Defining E14 and E15 | E14 , 15 | Assign Role Based Access | No |
 | Day 3 | Praneeth | modified the code due to errors and build the docker image locally |done  | --- | no |
 | Day 3 | Kommaddi Fayaz |  |  |  |  |
-| Day 3 | chaithanya |  |   |   |  |
+| Day 3 | chaithanya | Create docker file and implement git hub actions and create EC2 | Yes  |  prepare for presentation | No |
 
 
 ## 2. Endpoint tracker
