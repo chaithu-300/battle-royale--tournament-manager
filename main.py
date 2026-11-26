@@ -104,7 +104,7 @@ def home():
 
 # 1. Register player
 
-@app.post("/auth/register")
+@app.post("/register")
 def register(data: RegisterData):
 
     response = functions.register_user(
@@ -124,7 +124,7 @@ def register(data: RegisterData):
 
 # 2. Login
 
-@app.post("/auth/login")
+@app.post("/login")
 def login(data: LoginData):
 
     tokens = functions.verify_login(
@@ -143,7 +143,7 @@ def login(data: LoginData):
 
 # 3. Refresh token
 
-@app.post("/auth/refresh")
+@app.post("/refresh")
 def refresh(refresh_token: str = Header(None)):
 
     response = functions.refresh_access_token(refresh_token)
