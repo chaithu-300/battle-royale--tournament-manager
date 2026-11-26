@@ -14,13 +14,13 @@ Update your own row at every check-in.
 | Day | Partner | What will you do? | Completed? | What are you going to work on next? | Stuck on? |
 |---|---|---|---|---|---|
 | Day 1 | Praneeth | E1 to E6 endpoints | E1 & E2 | E3 to E6 endpoints | no |
-| Day 1 | Kommaddi Fayaz |  |  |  |  |
+| Day 1 | Kommaddi Fayaz | Authenticatin endpoints and E7,E8,E9 endpoints | Athentication Endpoints  | E7,E8,E9 Endpoints  |  |
 | Day 1 | chaithanya | Defined Endpoints from E10 to E15 | E10, 12, 13 |E14, 15 | No |
 | Day 2 | Praneeth | working on E3,E4,E5,E6 functions| completed | solve the errors|yes  |
-| Day 2 | Kommaddi Fayaz |   |  |  |  |
+| Day 2 | Kommaddi Fayaz | E7,E8,E9 endpoints  | E7,E8,E9 endpoints  | solvoing the merge errors and checking swager  | No |
 | Day 2 | chaithanya | Defining E14 and E15 | E14 , 15 | Assign Role Based Access | No |
 | Day 3 | Praneeth | modified the code due to errors and build the docker image locally |done  | --- | no |
-| Day 3 | Kommaddi Fayaz |  |  |  |  |
+| Day 3 | Kommaddi Fayaz | solvoing the merge errors and checking swager   | done | prepare for presentation  |  No  |
 | Day 3 | chaithanya | Create docker file and implement git hub actions and create EC2 | Yes  |  prepare for presentation | No |
 
 
