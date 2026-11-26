@@ -75,3 +75,16 @@ battle-royale-tournament-manager/
 ├── README.md
 └── requirements.txt
 ```
+
+## Database Tables
+
+| # | Table | Columns |
+| :--- | :--- | :--- |
+| 1 | `users` | `user_id`, `username`, `email`, `hashed_password`, `role`, `created_at` |
+| 2 | `tournaments` | `tournament_id`, `name`, `game_mode`, `max_squads`, `start_date`, `prize_pool`, `registration_status`, `status`, `organizer_id`, `created_at` |
+| 3 | `squads` | `squad_id`, `squad_name`, `tag`, `captain_id`, `created_at` |
+| 4 | `squad_members` | `member_id`, `squad_id`, `player_id`, `status`, `joined_at` |
+| 5 | `invitations` | `invitation_id`, `squad_id`, `invited_player_id`, `status`, `created_at` |
+| 6 | `registrations` | `registration_id`, `tournament_id`, `squad_id`, `status`, `registered_at` |
+| 7 | `matches` | `match_id`, `tournament_id`, `map_name`, `match_number`, `scheduled_time`, `status` |
+| 8 | `match_results` | `result_id`, `match_id`, `squad_id`, `placement`, `kills`, `total_points` |
