@@ -7,6 +7,15 @@
 | 06 | Kommaddi Fayaz | chaithanya |Praneeth | [battle-royale--tournament-manager](https://github.com/chaithu-300/battle-royale--tournament-manager) |
 
 
+## Problem Statements
+
+1. **Tournament Management Difficulty:** Managing BGMI tournaments manually, including tournament creation, registrations, match scheduling, and results, is time-consuming and difficult to organize efficiently.
+
+2. **Squad Formation and Coordination:** Players face difficulties in forming squads, inviting teammates, managing squad members, and registering their squads for tournaments in a centralized system.
+
+3. **Result Tracking and Ranking:** Tracking match placements, kills, calculating points, and maintaining an accurate tournament leaderboard manually can lead to errors and a lack of transparency.
+
+
 ## 1. Who is doing what
 
 Update your own row at every check-in.
