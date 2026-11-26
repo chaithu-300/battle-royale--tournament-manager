@@ -16,6 +16,265 @@
 3. **Result Tracking and Ranking:** Tracking match placements, kills, calculating points, and maintaining an accurate tournament leaderboard manually can lead to errors and a lack of transparency.
 
 
+# Backend Setup and Execution
+
+This project uses **FastAPI, Python, SQLite, and SQLAlchemy** for backend development.
+
+## 1. Prerequisites
+
+Install the following before running the project:
+- Docker Desktop (for Docker execution)
+- AWS account (for EC2 deployment)
+
+## 2. Clone the Repository
+
+```
+git clone <https://github.com/chaithu-300/battle-royale--tournament-manager/edit/main>
+```
+
+Navigate into the project:
+
+```
+cd <battle-royale-tournament-manager>
+```
+
+### Create a Virtual Environment
+
+```
+python -m venv venv
+```
+
+### Activate the Virtual Environment
+
+**Windows:**
+
+```
+venv\Scripts\activate
+```
+
+### Install Dependencies
+
+Install all project dependencies using the requirements file:
+
+```
+pip install -r requirements.txt
+```
+
+### Run the Application
+
+```
+uvicorn main:app --reload --port 8001
+```
+
+The Application will be available at:
+
+- Application URL: http://127.0.0.1:8001
+- API Documentation (Swagger UI): http://127.0.0.1:8001/docs
+
+## 4. Docker Setup and Execution
+
+Docker allows the application to run inside a container without requiring manual Python environment setup.
+
+Make sure Docker Desktop is installed and running.
+
+Open a terminal and navigate to the folder:
+
+```
+cd battle-royale-tournament-manager
+```
+
+### Build the Docker Image
+
+```
+docker build -t battle-royale-tournament-manager:v1.0.0 .
+```
+
+### Run the Docker Container
+
+```
+docker run -d -p 8001:8001 --name battle-royale-tournament-manager:v1.0.0
+```
+
+### Check Running Containers
+
+```
+docker ps
+```
+
+### View Container Logs
+
+```
+docker logs battle-royale-tournament-manager
+```
+
+### Stop the Container
+
+```
+docker stop battle-royale-tournament-manager
+```
+
+### Start the Container Again
+
+```
+docker start battle-royale-tournament-manager
+```
+
+### Remove the Container
+
+```
+docker stop battle-royale-tournament-manager
+docker rm battle-royale-tournament-manager
+```
+
+### Remove the Docker Image
+
+```
+docker rmi battle-royale-tournament-manager
+```
+
+The Dockerized backend will be available at:
+
+- Application URL: http://127.0.0.1:8001
+- API Documentation: http://127.0.0.1:8001/docs
+
+## 5. AWS EC2 Deployment
+
+AWS EC2 (Elastic Compute Cloud) is used to deploy and run the backend application on a cloud-based virtual machine.
+
+### Step 1: Launch an EC2 Instance
+
+1. Log in to the [AWS Management Console](https://console.aws.amazon.com/).
+2. Open the EC2 service.
+3. Select **Launch Instance**.
+4. Enter an instance name, such as `BGMI-Tournament-Backend`.
+5. Select **Ubuntu Server LTS** as the operating system.
+6. Choose an instance type suitable for your application.
+7. Create or select a key pair and download the `.pem` file.
+8. Configure the network settings and security group.
+9. Launch the instance.
+
+### Step 2: Configure Security Group
+
+Open the EC2 instance's Security Group and configure the following inbound rules:
+
+| Type | Protocol | Port | Source |
+|---|---|---|---|
+| SSH | TCP | 22 | My IP |
+| Custom TCP | TCP | 8001 | Your IP (testing) |
+
+For public access to the API, port 8001 can temporarily be opened to `0.0.0.0/0` for testing. Restrict access appropriately before production deployment.
+
+### Step 3: Connect to the EC2 Instance
+
+On your local computer, open a terminal in the folder containing your downloaded `.pem` key.
+
+Replace `<54.210.38.202>` with your instance's public IPv4 address.
+
+### Step 4: Update the Ubuntu System
+
+After connecting to EC2, execute:
+
+```
+sudo apt update
+sudo apt upgrade -y
+```
+
+Install Docker Engine:
+
+```
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+```
+
+Verify Docker installation:
+
+```
+sudo docker run hello-world
+```
+
+### Step 7: Build the Docker Image
+
+```
+sudo docker build -t bgmi-tournament-manager .
+```
+
+### Step 8: Run the Docker Container
+
+```
+sudo docker run -d -p 8001:8001 --restart unless-stopped --name battle-royale-tournament-manager
+```
+
+### Step 9: Verify Deployment
+
+Check whether the container is running:
+
+```
+sudo docker ps
+```
+
+View application logs:
+
+```
+sudo docker logs battle-royale-tournament-manager
+```
+
+Open the following URLs in your browser:
+
+**Backend API:**
+
+```text
+http://54.210.38.202:8001/docs
+```
+
+**Swagger API Documentation:**
+
+```
+http://54.210.38.202:8001/docs
+```
+
+Replace `<54.210.38.202>` with the public IPv4 address of your EC2 instance.
+
+## 6. Useful Docker Commands
+
+| Command | Description |
+|---|---|
+| `docker ps` | View running containers |
+| `docker ps -a` | View all containers |
+| `docker images` | View downloaded and built images |
+| `docker logs <container-name>` | View container logs |
+| `docker stop <container-name>` | Stop a container |
+| `docker start <container-name>` | Start a stopped container |
+| `docker restart <container-name>` | Restart a container |
+| `docker rm <container-name>` | Remove a container |
+| `docker rmi <image-name>` | Remove an image |
+
+**Note:** The Docker commands on EC2 are executed with `sudo` unless Docker permissions have been configured for the user.
+
+## 7. Database
+
+The application uses **SQLite** as its database and SQLAlchemy as its ORM.
+
+The database is configured using:
+
+```python
+DB_URL = "sqlite:///./battle-royale.db"
+```
+
+The database file is created automatically when the application initializes its database tables.
+
+**Important:** The database file inside a Docker container should be persisted using a Docker volume or a host-mounted directory. Otherwise, removing the container can result in database loss.
+
+For deployment, make sure the database storage location is mounted persistently.
+
+## 8. Project API Documentation
+
+FastAPI automatically generates interactive API documentation.
+
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`
+
+Use Swagger UI to test the authentication, tournament, squad, match, result, and leaderboard APIs.
+
+
 ## 1. Who is doing what
 
 Update your own row at every check-in.
