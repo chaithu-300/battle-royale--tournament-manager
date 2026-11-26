@@ -26,20 +26,38 @@ Update your own row at every check-in.
 
 ## 2. Endpoint tracker
 
-Fill in the method and path from your PRD's endpoint table. Status: ✅ done · 🟡 in progress · ⬜ not started
+## API Requirements
 
-| # | Method + path | Built | Rules checked in /docs | Connected to React | Who |
-|---|---|---|---|---|---|
-| E1 | GET /candidates | ✅ | ✅ | ⬜ | Fayaz and siva  |
-| E2 | GET /candidates/{candidate_id} | ✅ | ✅ | ⬜ | Fayaz aand Praneeth |
-| E3 | POST /candidates | ✅ | ✅ | ⬜ | Fayaz and siva |
-| E4 | PATCH /candidates/{candidate_id} | ✅ | ✅ | ⬜ |  Fayaz aand Praneeth  |
-| E5 | PATCH /candidates/{candidate_id}/withdraw | ✅ | ✅ | ⬜ |  Fayaz aand Praneeth  |
-| E6 | GET /election/phase | ✅ | ✅ | ⬜ |  Fayaz aand Praneeth  |
-| E7 | PATCH /election/phase | ✅ | ✅ | ⬜ | Fayaz and siva |
-| E8 | POST /votes | ✅ | ✅ | ⬜ | Fayaz and siva |
-| E9 | GET /votes/{voter_roll} | ✅ | ✅ | ⬜ | Fayaz and siva |
-| E10 | GET /results  | ✅ | ✅ | ⬜ | Fayaz and siva |
+The application provides 18 APIs across Authentication (A1–A3) and Project-Specific endpoints (E1–E15):
+
+### A. Authentication APIs
+
+| # | Description | Method | Endpoint | Path / Query Params | Request Body | Response Body | Status Codes |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| A1 | Register a new account | POST | `/register` | None | `username`, `email`, `password` | `message`, `user_id` | 201, 400, 409, 422 |
+| A2 | Login and generate access and refresh tokens | POST | `/login` | None | `email`, `password` | `message`, `access_token`, `refresh_token`, `token_type` | 200, 401, 422 |
+| A3 | Generate a new access token | POST | `/refresh` | Header: `token` | None | `access_token`, `token_type` | 200, 401 |
+
+### B. Project-Specific APIs
+
+| # | Description | Method | Endpoint | Path / Query Params | Request Body | Response Body | Status Codes |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| E1 | Create an organizer account (Admin) | POST | `/admin/organizers` | Header: `token` | `username`, `email`, `password` | `message`, `user_id` | 201, 400, 401, 403, 409 |
+| E2 | Create a tournament (Organizer) | POST | `/tournaments` | Header: `token` | `name`, `game_mode`, `max_squads`, `start_date`, `prize_pool` | `message`, `tournament_id` | 201, 400, 401, 403, 422 |
+| E3 | Get all available tournaments (All) | GET | `/tournaments` | Query: `status` (optional) | None | List of tournaments (`tournament_id`, `name`, `status`, `max_squads`, etc.) | 200 |
+| E4 | Get details of a particular tournament (All) | GET | `/tournaments/{tournament_id}` | Path: `tournament_id` | None | Tournament details (`tournament_id`, `name`, `game_mode`, `status`, `registered_squads`, etc.) | 200, 404 |
+| E5 | Update tournament details and registration status (Organizer) | PUT | `/tournaments/{tournament_id}` | Path: `tournament_id`, Header: `token` | `name`, `status`, `registration_status`, `max_squads`, `start_date` | `message`, updated tournament details | 200, 400, 401, 403, 404 |
+| E6 | Create a squad (Player) | POST | `/squads` | Header: `token` | `squad_name`, `tag` | `message`, `squad_id` | 201, 400, 401, 403, 422 |
+| E7 | Get squads created or joined by the logged-in player (Player) | GET | `/squads/my-squads` | Header: `token` | None | List of squads (`squad_id`, `squad_name`, `captain_id`, `members`) | 200, 401, 403 |
+| E8 | Invite a player to a squad (Squad captain) | POST | `/squads/invite` | Header: `token` | `squad_id`, `invited_player_id` | `message`, `invitation_id` | 200, 400, 401, 403, 404 |
+| E9 | Accept or reject a squad invitation (Invited player) | POST | `/squads/invitations/respond` | Header: `token` | `invitation_id`, `action` (`accept` / `reject`) | `message`, `status` | 200, 400, 401, 403, 404 |
+| E10 | Update squad details (Squad captain) | PUT | `/squads/{squad_id}` | Path: `squad_id`, Header: `token` | `squad_name`, `tag` | `message`, updated squad details | 200, 400, 401, 403, 404 |
+| E11 | Register a squad for a tournament (Squad captain) | POST | `/tournaments/{tournament_id}/register` | Path: `tournament_id`, Header: `token` | `squad_id` | `message`, `registration_id` | 201, 400, 401, 403, 404 |
+| E12 | Withdraw a squad from a tournament (Squad captain) | POST | `/tournaments/{tournament_id}/withdraw` | Path: `tournament_id`, Header: `token` | `squad_id` | `message`, `status` | 200, 400, 401, 403, 404 |
+| E13 | Schedule a tournament match (Organizer) | POST | `/tournaments/{tournament_id}/matches` | Path: `tournament_id`, Header: `token` | `map_name`, `match_number`, `scheduled_time` | `message`, `match_id` | 201, 400, 401, 403, 404 |
+| E14 | Submit match results (Organizer) | POST | `/matches/{match_id}/results` | Path: `match_id`, Header: `token` | `squad_id`, `placement`, `kills` | `message`, `total_points` | 200, 400, 401, 403, 404 |
+| E15 | Get the tournament leaderboard (All) | GET | `/tournaments/{tournament_id}/leaderboard` | Path: `tournament_id` | None | Ranked list of squads (`rank`, `squad_id`, `squad_name`, `total_kills`, `total_points`) | 200, 404 |
+
 
 
 ## 3.File structure
