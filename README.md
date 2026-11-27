@@ -1,6 +1,6 @@
 # battle-royale-tournament-manager
 
-# Team 06 · Class-rep-Elections
+# Team 04 · battle-royale-tournament-manager
 
 | Team | Partner 1 | Partner 2 | Partner 3 | Project |
 |---|---|---|---|---|
