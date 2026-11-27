@@ -4,7 +4,7 @@
 
 | Team | Partner 1 | Partner 2 | Partner 3 | Project |
 |---|---|---|---|---|
-| 06 | Kommaddi Fayaz | chaithanya |Praneeth | [battle-royale--tournament-manager](https://github.com/chaithu-300/battle-royale--tournament-manager) |
+| 04 | Kommaddi Fayaz | chaithanya |Praneeth | [battle-royale--tournament-manager](https://github.com/chaithu-300/battle-royale--tournament-manager) |
 
 
 ## Problem Statements
